@@ -1,5 +1,6 @@
 import os
 import json
+import html
 import threading
 import asyncio
 import aiohttp
@@ -96,6 +97,8 @@ def _admin_keyboard() -> types.InlineKeyboardMarkup:
     return types.InlineKeyboardMarkup(inline_keyboard=[[
         types.InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"),
         types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
+    ], [
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back"),
     ]])
 
 # --- Handlers ---
@@ -138,6 +141,14 @@ async def cb_stats(callback: types.CallbackQuery):
     total = len(_user_cache)
     active = sum(1 for u in _user_cache.values() if u.get("history"))
     await callback.message.answer(f"👥 Пользователей: {total}\n💬 С историей: {active}")
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_back")
+async def cb_back(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Только для админа", show_alert=True)
+        return
+    await callback.message.edit_reply_markup(reply_markup=_admin_keyboard())
     await callback.answer()
 
 @dp.message(F.text)
@@ -183,7 +194,9 @@ async def handle_message(message: types.Message):
             return
 
         _add_history(message.from_user.id, "assistant", ai_response)
-        await message.answer(f"🤖 {ai_response}")
+        # Экранируем HTML, чтобы не было ошибок парсинга
+        safe = html.escape(ai_response)
+        await message.answer(f"🤖 {safe}")
 
     except Exception as e:
         await message.answer(f"❌ Произошла ошибка: {str(e)}")
@@ -191,9 +204,10 @@ async def handle_message(message: types.Message):
 async def _do_broadcast(text: str, message: types.Message):
     sent = 0
     failed = 0
+    safe = html.escape(text)
     for uid_str in _user_cache.keys():
         try:
-            await bot.send_message(int(uid_str), f"📢 <b>Рассылка от админа:</b>\n\n{text}", parse_mode=ParseMode.HTML)
+            await bot.send_message(int(uid_str), f"📢 <b>Рассылка от админа:</b>\n\n{safe}", parse_mode=ParseMode.HTML)
             sent += 1
             await asyncio.sleep(0.05)
         except Exception:
