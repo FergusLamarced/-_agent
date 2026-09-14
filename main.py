@@ -58,7 +58,8 @@ def _get_user(uid: int) -> dict:
             "preferences": "",
             "history": [],
             "first_seen": "",
-            "last_seen": ""
+            "last_seen": "",
+            "awaiting_broadcast": False
         }
     return _user_cache[key]
 
@@ -130,7 +131,10 @@ async def cb_broadcast(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("Только для админа", show_alert=True)
         return
-    await callback.message.answer("Введи текст рассылки (ответь на это сообщение):")
+    u = _get_user(callback.from_user.id)
+    u["awaiting_broadcast"] = True
+    _save_users()
+    await callback.message.answer("✍️ Пришли текст рассылки следующим сообщением:")
     await callback.answer()
 
 @dp.callback_query(F.data == "admin_stats")
@@ -148,7 +152,13 @@ async def cb_back(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("Только для админа", show_alert=True)
         return
-    await callback.message.edit_reply_markup(reply_markup=_admin_keyboard())
+    u = _get_user(callback.from_user.id)
+    u["awaiting_broadcast"] = False
+    _save_users()
+    try:
+        await callback.message.edit_reply_markup(reply_markup=_admin_keyboard())
+    except Exception:
+        await callback.message.answer("Главное меню:", reply_markup=_admin_keyboard())
     await callback.answer()
 
 @dp.message(F.text)
@@ -156,9 +166,12 @@ async def handle_message(message: types.Message):
     _update_user(message)
     _add_history(message.from_user.id, "user", message.text)
 
-    # Если админ ответил на просьбу ввести текст рассылки
-    if message.from_user.id == ADMIN_ID and message.reply_to_message:
-        if "Введи текст рассылки" in (message.reply_to_message.text or ""):
+    # Если админ в режиме ожидания текста рассылки
+    if message.from_user.id == ADMIN_ID:
+        u = _get_user(message.from_user.id)
+        if u.get("awaiting_broadcast"):
+            u["awaiting_broadcast"] = False
+            _save_users()
             await _do_broadcast(message.text, message)
             return
 
