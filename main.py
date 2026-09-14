@@ -1,5 +1,7 @@
 import os
 import threading
+import asyncio
+import aiohttp
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
@@ -81,14 +83,27 @@ async def handle_message(message: types.Message):
 
 async def main():
     _start_health_server()
+    asyncio.create_task(_self_ping())
     print("Бот запускается...", flush=True)
     await dp.start_polling(bot)
 
 
-# --- Healthcheck для Render Web Service (бесплатный тариф) ---
-# Render требует открытый HTTP-порт, иначе гасит сервис через ~5 минут.
-# Этот крошечный сервер на stdlib слушает $PORT и отвечает 200 OK.
-# Новых зависимостей не требует.
+# --- Self-ping для Render Web Service (бесплатный тариф) ---
+# Render засыпает через ~15 мин без HTTP-трафика.
+# Этот фоновый таск каждые 4 минуты стучится в свой URL, чтобы не усыпили.
+RENDER_URL = os.getenv("RENDER_URL", "https://agent-ju76.onrender.com")
+PING_INTERVAL = 240  # секунды (4 минуты)
+
+async def _self_ping():
+    await asyncio.sleep(10)  # дать боту запуститься
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(RENDER_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    print(f"Self-ping {resp.status}", flush=True)
+            except Exception as e:
+                print(f"Self-ping error: {e}", flush=True)
+            await asyncio.sleep(PING_INTERVAL)
 class _HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
