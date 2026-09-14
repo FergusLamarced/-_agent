@@ -1,4 +1,6 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -78,8 +80,34 @@ async def handle_message(message: types.Message):
 
 
 async def main():
+    _start_health_server()
     print("Бот запускается...", flush=True)
     await dp.start_polling(bot)
+
+
+# --- Healthcheck для Render Web Service (бесплатный тариф) ---
+# Render требует открытый HTTP-порт, иначе гасит сервис через ~5 минут.
+# Этот крошечный сервер на stdlib слушает $PORT и отвечает 200 OK.
+# Новых зависимостей не требует.
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *args):
+        pass
+
+
+def _start_health_server():
+    port = int(os.getenv("PORT", "10000"))
+    try:
+        server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        print(f"Healthcheck слушает порт {port}", flush=True)
+    except Exception as e:
+        print(f"Health-сервер не стартовал: {e}", flush=True)
 
 
 if __name__ == "__main__":
