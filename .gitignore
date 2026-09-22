@@ -1,0 +1,4 @@
+.env
+tocen.env
+__pycache__/
+*.py[cod]
