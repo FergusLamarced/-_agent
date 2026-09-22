@@ -108,6 +108,16 @@ def _get_search_state(uid: int) -> dict:
     return _SEARCH_TASKS[key]
 
 # --- Keyboards ---
+def _main_keyboard() -> types.ReplyKeyboardMarkup:
+    return types.ReplyKeyboardMarkup(
+        keyboard=[[types.KeyboardButton(text="🔍 Поиск вакансий"),
+                  types.KeyboardButton(text="📢 Рассылка")],
+               [types.KeyboardButton(text="📊 Статистика"),
+                  types.KeyboardButton(text="⬅️ Назад")]],
+        resize_keyboard=True,
+        selective=True,
+    )
+
 def _admin_keyboard() -> types.InlineKeyboardMarkup:
     return types.InlineKeyboardMarkup(inline_keyboard=[[
         types.InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast"),
@@ -132,7 +142,7 @@ async def cmd_start(message: types.Message):
     _update_user(message)
     u = _get_user(message.from_user.id)
     name = u.get("name") or "друг"
-    kb = _admin_keyboard() if message.from_user.id == ADMIN_ID else types.ReplyKeyboardRemove()
+    kb = _main_keyboard() if message.from_user.id != ADMIN_ID else _admin_keyboard()
     await message.answer(
         f"Привет, {name}! Я бот с бесплатным ИИ от Groq.\n"
         f"Модель: {MODEL} (120B, бесплатно, быстро).\n"
