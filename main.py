@@ -223,7 +223,8 @@ async def cmd_search(message: types.Message):
     u["awaiting_search_query"] = True
     _save_users()
 
-@dp.message(F.text & ~Command("start") & ~Command("broadcast") & ~Command("search"))
+# Хэндлер для всех текстовых сообщений (кроме команд)
+@dp.message()
 async def handle_message(message: types.Message):
     _update_user(message)
 
